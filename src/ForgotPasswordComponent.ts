@@ -1,27 +1,18 @@
 import {BaseComponent} from './BaseComponent';
+import {LoadingService, ResourceService} from './core';
+import {validateContact} from './forgot';
 import {PasswordService} from './PasswordService';
-import {isEmpty, LoadingService, ResourceService} from './core';
 
-export class BaseForgotPasswordComponent extends BaseComponent {
+export class ForgotPasswordComponent extends BaseComponent {
   constructor(passwordService: PasswordService, resource: ResourceService, protected loading?: LoadingService) {
     super(passwordService, resource);
-    this.validate = this.validate.bind(this);
     this.forgotPassword = this.forgotPassword.bind(this);
   }
   contact = '';
 
-  validate(contact: string): boolean {
-    const r = this.resourceService;
-    if (isEmpty(contact)) {
-      const msg = r.format(r.value('error_required'), r.value('email'));
-      this.showError(msg);
-      return false;
-    }
-    return true;
-  }
   async forgotPassword() {
     this.contact = this.contact.trim();
-    if (!this.validate(this.contact)) {
+    if (!validateContact(this.contact, 'email', this.resourceService, this.showError)) {
       return;
     } else {
       this.hideMessage();

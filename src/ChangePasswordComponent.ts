@@ -1,12 +1,12 @@
+import {BaseComponent} from './BaseComponent';
+import {validateChange} from './change';
+import {LoadingService, ResourceService} from './core';
 import {PasswordChange} from './PasswordChange';
 import {PasswordService} from './PasswordService';
-import {BaseComponent} from './BaseComponent';
-import {isEmpty, LoadingService, ResourceService} from './core';
 
-export class BaseChangePasswordComponent extends BaseComponent {
+export class ChangePasswordComponent extends BaseComponent {
   constructor(passwordService: PasswordService, resource: ResourceService, protected loading?: LoadingService) {
     super(passwordService, resource);
-    this.validate = this.validate.bind(this);
     this.changePassword = this.changePassword.bind(this);
   }
   user: PasswordChange = {
@@ -16,34 +16,10 @@ export class BaseChangePasswordComponent extends BaseComponent {
     password: ''
   };
   confirmPassword = '';
-
-  validate(user: PasswordChange): boolean {
-    const r = this.resourceService;
-    if (isEmpty(user.username)) {
-      const msg = r.format(r.value('error_required'), r.value('username'));
-      this.showError(msg);
-      return false;
-    }
-    if (isEmpty(user.password)) {
-      const msg = r.format(r.value('error_required'), r.value('new_password'));
-      this.showError(msg);
-      return false;
-    }
-    if (isEmpty(user.currentPassword)) {
-      const msg = r.format(r.value('error_required'), r.value('current_password'));
-      this.showError(msg);
-      return false;
-    }
-    if (user.password !== this.confirmPassword) {
-      const msg = r.value('error_confirm_password');
-      this.showError(msg);
-      return false;
-    }
-    return true;
-  }
+  
   async changePassword() {
     this.user.username = this.user.username.trim();
-    if (!this.validate(this.user)) {
+    if (!validateChange(this.user, this.confirmPassword, this.resourceService, this.showError)) {
       return;
     } else {
       this.hideMessage();
