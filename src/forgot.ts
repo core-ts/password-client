@@ -10,7 +10,7 @@ export function validateContact(contact: string, resourceKey: string, r: Resourc
   return true;
 }
 
-export async function forgotPassword(passwordService: PasswordService, contact: string, resourceKey: string, r: ResourceService, m: MessageService, loading: LoadingService, validate: (u: string, c: string, r2: ResourceService, show: (m3: string, field3?: string) => void) => boolean, handleError: (err: any) => void) {
+export async function forgotPassword(passwordService: PasswordService, contact: string, resourceKey: string, r: ResourceService, m: MessageService, validate: (u: string, c: string, r2: ResourceService, show: (m3: string, field3?: string) => void) => boolean, handleError: (err: any) => void, loading?: LoadingService) {
   m.hideMessages();
   if (!validate(contact, resourceKey, r, m.showError)) {
     return;

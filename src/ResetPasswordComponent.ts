@@ -18,6 +18,6 @@ export class ResetPasswordComponent extends BaseComponent {
 
   resetPassword() {
     this.user.username = this.user.username.trim();
-    resetPassword(this.passwordService, this.user, this.confirmPassword, this.resourceService, this, this.loading, validateReset, this.handleError);
+    resetPassword(this.passwordService, this.user, this.confirmPassword, this.resourceService, this, validateReset, this.handleError, this.loading);
   }
 }

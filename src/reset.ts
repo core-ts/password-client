@@ -2,7 +2,7 @@ import {PasswordReset} from './PasswordReset';
 import {PasswordService} from './PasswordService';
 import {isEmpty, LoadingService, MessageService, ResourceService} from './core';
 
-export async function resetPassword(passwordService: PasswordService, user: PasswordReset, confirmPassword: string, r: ResourceService, m: MessageService, loading: LoadingService, validate: (u: PasswordReset, c: string, r2: ResourceService, show: (m3: string, field3?: string) => void) => boolean, handleError: (err: any) => void) {
+export async function resetPassword(passwordService: PasswordService, user: PasswordReset, confirmPassword: string, r: ResourceService, m: MessageService, validate: (u: PasswordReset, c: string, r2: ResourceService, show: (m3: string, field3?: string) => void) => boolean, handleError: (err: any) => void, loading?: LoadingService) {
   m.hideMessages();
   if (!validate(user, confirmPassword, r, m.showError)) {
     return;
