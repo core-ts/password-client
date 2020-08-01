@@ -6,7 +6,7 @@ export class BaseComponent {
     this.resource = resourceService.resource();
     this.showInfo = this.showInfo.bind(this);
     this.showError = this.showError.bind(this);
-    this.hideMessage = this.hideMessage.bind(this);
+    this.hideMessages = this.hideMessages.bind(this);
     this.handleError = this.handleError.bind(this);
   }
   resource: any;
@@ -21,7 +21,7 @@ export class BaseComponent {
     this.alertClass = 'alert alert-danger';
     this.message = msg;
   }
-  hideMessage(field?: string): void {
+  hideMessages(field?: string): void {
     this.alertClass = '';
     this.message = '';
   }

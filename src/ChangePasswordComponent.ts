@@ -19,10 +19,9 @@ export class ChangePasswordComponent extends BaseComponent {
   
   async changePassword() {
     this.user.username = this.user.username.trim();
+    this.hideMessages();
     if (!validateChange(this.user, this.confirmPassword, this.resourceService, this.showError)) {
       return;
-    } else {
-      this.hideMessage();
     }
     try {
       if (this.loading) {

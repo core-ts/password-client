@@ -1,5 +1,5 @@
 import {BaseComponent} from './BaseComponent';
-import {LoadingService, ResourceService} from './core';
+import {LoadingService, MessageService, ResourceService} from './core';
 import {validateContact} from './forgot';
 import {PasswordService} from './PasswordService';
 
@@ -15,7 +15,7 @@ export class ForgotPasswordComponent extends BaseComponent {
     if (!validateContact(this.contact, 'email', this.resourceService, this.showError)) {
       return;
     } else {
-      this.hideMessage();
+      this.hideMessages();
     }
     try {
       if (this.loading) {
@@ -40,3 +40,4 @@ export class ForgotPasswordComponent extends BaseComponent {
     }
   }
 }
+

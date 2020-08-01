@@ -15,7 +15,7 @@ export interface LoadingService {
 export interface MessageService {
   showInfo(msg: string, field?: string): void;
   showError(msg: string, field?: string): void;
-  hideMessage(field?: string): void;
+  hideMessages(): void;
 }
 
 export function isEmpty(str: string): boolean {
