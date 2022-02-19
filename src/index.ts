@@ -1,28 +1,34 @@
+export const email = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)*(\.[a-zA-Z]{2,4})$/i;
+export const simplePassword = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
+export const mediumPassword = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z])[0-9a-zA-Z]{8,}$/;
+export const strongPassword = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
 export interface PasswordReset {
   username: string;
   passcode: string;
   password: string;
 }
-
 export interface PasswordChange {
   step?: number;
   username: string;
   passcode?: string;
   currentPassword: string;
   password: string;
-  senderType?: string;
 }
-
 export interface PasswordService {
   forgotPassword(contact: string): Promise<boolean>;
   resetPassword(pass: PasswordReset): Promise<boolean|number>;
   changePassword(pass: PasswordChange): Promise<boolean|number>;
 }
-
 interface Headers {
   [key: string]: any;
 }
-
+interface ErrorMessage {
+  field: string;
+  code: string;
+  param?: string|number|Date;
+  message?: string;
+}
 export interface HttpRequest {
   get<T>(url: string, options?: { headers?: Headers; }): Promise<T>;
   delete<T>(url: string, options?: { headers?: Headers; }): Promise<T>;
@@ -31,30 +37,38 @@ export interface HttpRequest {
   patch<T>(url: string, obj: any, options?: { headers?: Headers; }): Promise<T>;
 }
 
-export class PasswordWebClient implements PasswordService {
-  constructor(protected http: HttpRequest, protected serviceUrl: string) {
+export class Client implements PasswordService {
+  constructor(public http: HttpRequest, public url: string, public getForgot?: boolean) {
+    this.forgotPassword = this.forgotPassword.bind(this);
+    this.resetPassword = this.resetPassword.bind(this);
+    this.changePassword = this.changePassword.bind(this);
   }
-
   forgotPassword(contact: string): Promise<boolean> {
-    const url = this.serviceUrl + '/forgot/' + contact;
-    return this.http.get<boolean>(url);
+    if (this.getForgot) {
+      const url = this.url + '/forgot/' + contact;
+      return this.http.get<boolean>(url);
+    } else {
+      const url = this.url + '/forgot';
+      return this.http.post<boolean>(url, {contact});
+    }
   }
-
-  resetPassword(password: PasswordReset): Promise<boolean|number> {
-    const url = this.serviceUrl + '/reset';
-    return this.http.post<boolean>(url, password);
+  resetPassword(pass: PasswordReset): Promise<boolean|number> {
+    const url = this.url + '/reset';
+    return this.http.post<boolean>(url, pass);
   }
-
   changePassword(pass: PasswordChange): Promise<boolean|number> {
-    const url = this.serviceUrl + '/change';
+    const url = this.url + '/change';
     return this.http.put<boolean>(url, pass);
   }
 }
-
+export const PasswordClient = Client;
+export interface StringMap {
+  [key: string]: string;
+}
 export interface ResourceService {
-  resource(): any;
+  resource(): StringMap;
   value(key: string, param?: any): string;
-  format(...args: any[]): string;
+  format(f: string, ...args: any[]): string;
 }
 
 export interface LoadingService {
@@ -62,231 +76,338 @@ export interface LoadingService {
   hideLoading(): void;
 }
 
-export interface MessageService {
-  showInfo(msg: string, field?: string): void;
-  showError(msg: string, field?: string): void;
-  hideMessage(field?: string): void;
-}
-
-export function isEmpty(str: string): boolean {
+export function isEmpty(str?: string): boolean {
   return (!str || str === '');
 }
 
-export class BaseComponent {
-  constructor(protected passwordService: PasswordService, protected resourceService: ResourceService) {
-    this.resource = resourceService.resource();
-    this.showInfo = this.showInfo.bind(this);
-    this.showError = this.showError.bind(this);
-    this.hideMessage = this.hideMessage.bind(this);
-    this.handleError = this.handleError.bind(this);
-  }
-  resource: any;
-  message = '';
-  alertClass = '';
-
-  showInfo(msg: string, field?: string): void {
-    this.alertClass = 'alert alert-info';
-    this.message = msg;
-  }
-  showError(msg: string, field?: string): void {
-    this.alertClass = 'alert alert-danger';
-    this.message = msg;
-  }
-  hideMessage(field?: string): void {
-    this.alertClass = '';
-    this.message = '';
-  }
-  handleError(err?: any): void {
-    const r = this.resourceService;
-    const msg = r.value('error_internal');
-    this.showError(msg);
-  }
+export function createError(code: string, field: string, message: string): ErrorMessage {
+  return { code, field, message };
 }
-
-export class BaseForgotPasswordComponent extends BaseComponent {
-  constructor(passwordService: PasswordService, resource: ResourceService, protected loading?: LoadingService) {
-    super(passwordService, resource);
-    this.validate = this.validate.bind(this);
-    this.forgotPassword = this.forgotPassword.bind(this);
-  }
-  contact = '';
-
-  validate(contact: string): boolean {
-    const r = this.resourceService;
+export function validateContact(contact: string, key: string, r: ResourceService, reg?: RegExp, showError?: (msg: string, field?: string) => void): boolean|ErrorMessage[] {
+  if (showError) {
     if (isEmpty(contact)) {
-      const msg = r.format(r.value('error_required'), r.value('email'));
-      this.showError(msg);
+      const msg = r.format(r.value('error_required'), r.value(key));
+      showError(msg, 'contact');
+      return false;
+    }
+    if (reg && !reg.test(contact)) {
+      const msg = r.value('error_contact_exp');
+      showError(msg, 'contact');
       return false;
     }
     return true;
-  }
-  async forgotPassword() {
-    this.contact = this.contact.trim();
-    if (!this.validate(this.contact)) {
-      return;
-    } else {
-      this.hideMessage();
+  } else {
+    const errs: ErrorMessage[] = [];
+    if (isEmpty(contact)) {
+      const msg = r.format(r.value('error_required'), r.value(key));
+      const e = createError('required', 'contact', msg);
+      errs.push(e);
     }
-    try {
-      if (this.loading) {
-        this.loading.showLoading();
-      }
-      const result = await this.passwordService.forgotPassword(this.contact);
-      const r = this.resourceService;
-      if (result) {
-        const msg =  r.value('success_forgot_password');
-        this.showInfo(msg);
-      } else {
-        const msg = r.value('fail_forgot_password');
-        this.showError(msg);
-      }
-    } catch (err) {
-      this.handleError(err);
+    if (reg && !reg.test(contact)) {
+      const msg = r.value('error_contact_exp');
+      const e = createError('exp', 'contact', msg);
+      errs.push(e);
     }
-    finally {
-      if (this.loading) {
-        this.loading.hideLoading();
-      }
-    }
+    return errs;
   }
 }
-
-export class BaseChangePasswordComponent extends BaseComponent {
-  constructor(passwordService: PasswordService, resource: ResourceService, protected loading?: LoadingService) {
-    super(passwordService, resource);
-    this.validate = this.validate.bind(this);
-    this.changePassword = this.changePassword.bind(this);
+export function forgotPassword (
+    forgot: (contact: string) => Promise<boolean>,
+    contact: string, r: StringMap,
+    showMessage: (msg: string, field?: string) => void,
+    showError: (msg: string, field?: string) => void,
+    handleError: (err: any) => void,
+    loading?: LoadingService): void {
+  if (loading) {
+    loading.showLoading();
   }
-  user: PasswordChange = {
-    step: null,
-    username: '',
-    currentPassword: '',
-    password: ''
-  };
-  confirmPassword = '';
+  forgot(contact).then(res => {
+    if (res) {
+      const msg =  r.success_forgot_password;
+      showMessage(msg, 'contact');
+    } else {
+      const msg = r.fail_forgot_password;
+      showError(msg, 'contact');
+    }
+    if (loading) {
+      loading.hideLoading();
+    }
+  }).catch(err => {
+    handleError(err);
+    if (loading) {
+      loading.hideLoading();
+    }
+  });
+}
+export function validateAndForgotPassword (
+    forgot: (contact: string) => Promise<boolean>,
+    contact: string,
+    key: string,
+    r: ResourceService,
+    showMessage: (msg: string, field?: string) => void,
+    showError: (msg: string, field?: string) => void,
+    hideMessage: (field?: string) => void,
+    validateC: (u: string, k: string, r2: ResourceService, re?: RegExp, showE2?: (msg: string, field?: string) => void) => boolean|ErrorMessage[],
+    handleError: (err: any) => void,
+    reg?: RegExp,
+    loading?: LoadingService,
+    showCustomError?: (msg: string|ErrorMessage[]) => void) {
+  const s = (showCustomError ? undefined : showError);
+  const results = validateC(contact, key, r, reg, s);
+  if (results === false) {
+    return;
+  } else if (Array.isArray(results) && results.length > 0) {
+    if (showCustomError) {
+      showCustomError(results);
+    }
+    return;
+  } else {
+    hideMessage();
+  }
+  forgotPassword(forgot, contact, r.resource(), showMessage, showError, handleError, loading);
+}
 
-  validate(user: PasswordChange): boolean {
-    const r = this.resourceService;
+export function validateReset(user: PasswordReset, confirmPassword: string, r: ResourceService, reg?: RegExp, showError?: (msg: string, field?: string) => void): boolean|ErrorMessage[] {
+  if (showError) {
     if (isEmpty(user.username)) {
       const msg = r.format(r.value('error_required'), r.value('username'));
-      this.showError(msg);
+      showError(msg, 'username');
+      return false;
+    } else if (isEmpty(user.passcode)) {
+      const msg = r.format(r.value('error_required'), r.value('passcode'));
+      showError(msg, 'passcode');
+      return false;
+    } else if (isEmpty(user.password)) {
+      const msg = r.format(r.value('error_required'), r.value('new_password'));
+      showError(msg, 'password');
+      return false;
+    }
+    if (reg && !reg.test(user.password)) {
+      const msg = r.format(r.value('error_password_exp'), r.value('new_password'));
+      showError(msg, 'password');
+      return false;
+    }
+    if (user.password !== confirmPassword) {
+      const msg = r.value('error_confirm_password');
+      showError(msg, 'confirmPassword');
+      return false;
+    }
+    return true;
+  } else {
+    const errs: ErrorMessage[] = [];
+    if (isEmpty(user.username)) {
+      const msg = r.format(r.value('error_required'), r.value('username'));
+      const e = createError('required', 'username', msg);
+      errs.push(e);
+    }
+    if (isEmpty(user.passcode)) {
+      const msg = r.format(r.value('error_required'), r.value('passcode'));
+      const e = createError('required', 'passcode', msg);
+      errs.push(e);
+    }
+    if (isEmpty(user.password)) {
+      const msg = r.format(r.value('error_required'), r.value('new_password'));
+      const e = createError('required', 'password', msg);
+      errs.push(e);
+    }
+    if (reg && !reg.test(user.password)) {
+      const msg = r.format(r.value('error_password_exp'), r.value('new_password'));
+      const e = createError('exp', 'password', msg);
+      errs.push(e);
+    }
+    if (user.password !== confirmPassword) {
+      const msg = r.value('error_confirm_password');
+      const e = createError('eq', 'confirmPassword', msg);
+      e.param = 'password';
+      errs.push(e);
+    }
+    return errs;
+  }
+}
+export function resetPassword (
+    reset: (pass: PasswordReset) => Promise<boolean|number>,
+    user: PasswordReset, r: StringMap,
+    showMessage: (msg: string, field?: string) => void,
+    showError: (msg: string, field?: string) => void,
+    handleError: (err: any) => void,
+    loading?: LoadingService): void {
+  if (loading) {
+    loading.showLoading();
+  }
+  reset(user).then(success => {
+    if (success === true || success === 1) {
+      const msg = r.success_reset_password;
+      showMessage(msg);
+    } else {
+      const msg = r.fail_reset_password;
+      showError(msg);
+    }
+    if (loading) {
+      loading.hideLoading();
+    }
+  }).catch(err => {
+    handleError(err);
+    if (loading) {
+      loading.hideLoading();
+    }
+  });
+}
+export function validateAndResetPassword (
+    reset: (pass: PasswordReset) => Promise<boolean|number>,
+    user: PasswordReset,
+    confirmPassword: string,
+    r: ResourceService,
+    showMessage: (msg: string, field?: string) => void,
+    showError: (msg: string, field?: string) => void,
+    hideMessage: (field?: string) => void,
+    validate: (u: PasswordReset, c: string, r2: ResourceService, re?: RegExp, showE?: (msg: string, field?: string) => void) => boolean|ErrorMessage[],
+    handleError: (err: any) => void,
+    reg?: RegExp,
+    loading?: LoadingService,
+    showCustomError?: (msg: string|ErrorMessage[]) => void) {
+  const s = (showCustomError ? undefined : showError);
+  const results = validate(user, confirmPassword, r, reg, s);
+  if (results === false) {
+    return;
+  } else if (Array.isArray(results) && results.length > 0) {
+    if (showCustomError) {
+      showCustomError(results);
+    }
+    return;
+  } else {
+    hideMessage();
+  }
+  resetPassword(reset, user, r.resource(), showMessage, showError, handleError, loading);
+}
+
+export function validateChange(user: PasswordChange, confirmPassword: string, r: ResourceService, reg?: RegExp, showError?: (msg: string, field?: string) => void): boolean|ErrorMessage[] {
+  if (showError) {
+    if (isEmpty(user.username)) {
+      const msg = r.format(r.value('error_required'), r.value('username'));
+      showError(msg, 'username');
       return false;
     }
     if (isEmpty(user.password)) {
       const msg = r.format(r.value('error_required'), r.value('new_password'));
-      this.showError(msg);
+      showError(msg, 'password');
+      return false;
+    }
+    if (reg && !reg.test(user.password)) {
+      const msg = r.format(r.value('error_password_exp'), r.value('new_password'));
+      showError(msg, 'password');
       return false;
     }
     if (isEmpty(user.currentPassword)) {
       const msg = r.format(r.value('error_required'), r.value('current_password'));
-      this.showError(msg);
+      showError(msg, 'currentPassword');
       return false;
     }
-    if (user.password !== this.confirmPassword) {
+    if (user.step && user.step >= 1 && isEmpty(user.passcode)) {
+      const msg = r.format(r.value('error_required'), r.value('passcode'));
+      showError(msg, 'passcode');
+      return false;
+    }
+    if (user.password !== confirmPassword) {
       const msg = r.value('error_confirm_password');
-      this.showError(msg);
+      showError(msg, 'confirmPassword');
       return false;
     }
     return true;
-  }
-  async changePassword() {
-    this.user.username = this.user.username.trim();
-    if (!this.validate(this.user)) {
-      return;
-    } else {
-      this.hideMessage();
+  } else {
+    const errs: ErrorMessage[] = [];
+    if (isEmpty(user.username)) {
+      const msg = r.format(r.value('error_required'), r.value('username'));
+      const e = createError('required', 'username', msg);
+      errs.push(e);
     }
-    try {
-      if (this.loading) {
-        this.loading.showLoading();
-      }
-      const result = await this.passwordService.changePassword(this.user);
-      const r = this.resourceService;
-      if (result === 2) {
-        const msg = r.value('success_send_passcode_change_password');
-        this.showInfo(msg);
-        this.user.step = 1;
-      } else if (result === true || result === 1) {
-        const msg = r.value('success_change_password');
-        this.showInfo(msg);
-      } else {
-        const msg = r.value('fail_change_password');
-        this.showError(msg);
-      }
-    } catch (err) {
-      this.handleError(err);
-    } finally {
-      if (this.loading) {
-        this.loading.hideLoading();
-      }
+    if (isEmpty(user.password)) {
+      const msg = r.format(r.value('error_required'), r.value('new_password'));
+      const e = createError('required', 'password', msg);
+      errs.push(e);
     }
+    if (reg && !reg.test(user.password)) {
+      const msg = r.format(r.value('error_password_exp'), r.value('new_password'));
+      const e = createError('exp', 'password', msg);
+      errs.push(e);
+    }
+    if (isEmpty(user.currentPassword)) {
+      const msg = r.format(r.value('error_required'), r.value('current_password'));
+      const e = createError('required', 'currentPassword', msg);
+      errs.push(e);
+    }
+    if (user.step && user.step >= 1 && isEmpty(user.passcode)) {
+      const msg = r.format(r.value('error_required'), r.value('passcode'));
+      const e = createError('required', 'passcode', msg);
+      errs.push(e);
+    }
+    if (user.password !== confirmPassword) {
+      const msg = r.value('error_confirm_password');
+      const e = createError('eq', 'confirmPassword', msg);
+      e.param = 'password';
+      errs.push(e);
+    }
+    return errs;
   }
 }
-
-export async function resetPassword(passwordService: PasswordService, user: PasswordReset, confirmPassword: string, r: ResourceService, m: MessageService, loading: LoadingService, validate: (u: PasswordReset, c: string, r2: ResourceService, m2: MessageService) => boolean, handleError: (err: any) => void) {
-  if (!validateReset(user, confirmPassword, r, m)) {
-    return;
-  } else {
-    m.hideMessage();
+export function changePassword (
+    change: (pass: PasswordChange) => Promise<boolean|number>,
+    user: PasswordChange, r: StringMap,
+    showMessage: (msg: string, field?: string) => void,
+    showError: (msg: string, field?: string) => void,
+    handleError: (err: any) => void,
+    loading?: LoadingService): void {
+  if (loading) {
+    loading.showLoading();
   }
-  try {
-    if (loading) {
-      loading.showLoading();
-    }
-    const success = await passwordService.resetPassword(user);
-    if (success === true || success === 1) {
-      const msg = r.value('success_reset_password');
-      m.showInfo(msg);
+  change(user).then(res => {
+    if (res === 2) {
+      const msg = r.success_send_passcode_change_password;
+      showMessage(msg);
+      user.step = 1;
+    } else if (res < 0) {
+      const msg = r.password_duplicate;
+      showError(msg);
+    } else if (res === true || res === 1) {
+      const msg = r.success_change_password;
+      showMessage(msg);
     } else {
-      const msg = r.value('fail_reset_password');
-      m.showError(msg);
+      const msg = r.fail_change_password;
+      showError(msg);
     }
-  } catch (err) {
-    handleError(err);
-  }
-  finally {
     if (loading) {
       loading.hideLoading();
     }
-  }
+  }).catch(err => {
+    handleError(err);
+    if (loading) {
+      loading.hideLoading();
+    }
+  });
 }
-
-export function validateReset(user: PasswordReset, confirmPassword: string, r: ResourceService, m: MessageService): boolean {
-  let valid = true;
-  if (isEmpty(user.username)) {
-    valid = false;
-    const msg = r.format(r.value('error_required'), r.value('username'));
-    m.showError(msg, 'username');
-  } else if (isEmpty(user.passcode)) {
-    valid = false;
-    const msg = r.format(r.value('error_required'), r.value('passcode'));
-    m.showError(msg, 'passcode');
-  } else if (isEmpty(user.password)) {
-    valid = false;
-    const msg = r.format(r.value('error_required'), r.value('new_password'));
-    m.showError(msg, 'password');
-  } else if (user.password !== confirmPassword) {
-    valid = false;
-    const msg = r.value('error_confirm_password');
-    m.showError(msg, 'confirmPassword');
+export function validateAndChangePassword (
+    change: (pass: PasswordChange) => Promise<boolean|number>,
+    user: PasswordChange,
+    confirmPassword: string,
+    r: ResourceService,
+    showMessage: (msg: string, field?: string) => void,
+    showError: (msg: string, field?: string) => void,
+    hideMessage: (field?: string) => void,
+    validate: (u: PasswordChange, c: string, r2: ResourceService, re?: RegExp, showE?: (msg: string, field?: string) => void) => boolean|ErrorMessage[],
+    handleError: (err: any) => void,
+    reg?: RegExp,
+    loading?: LoadingService,
+    showCustomError?: (msg: string|ErrorMessage[]) => void) {
+  const s = (showCustomError ? undefined : showError);
+  const results = validate(user, confirmPassword, r, reg, s);
+  if (results === false) {
+    return;
+  } else if (Array.isArray(results) && results.length > 0) {
+    if (showCustomError) {
+      showCustomError(results);
+    }
+    return;
+  } else {
+    hideMessage();
   }
-  return valid;
-}
-
-export class BaseResetPasswordComponent extends BaseComponent {
-  constructor(passwordService: PasswordService, resource: ResourceService, protected loading?: LoadingService) {
-    super(passwordService, resource);
-    this.resetPassword = this.resetPassword.bind(this);
-  }
-  user: PasswordReset = {
-    username: '',
-    passcode: '',
-    password: ''
-  };
-  confirmPassword = '';
-
-  resetPassword() {
-    this.user.username = this.user.username.trim();
-    resetPassword(this.passwordService, this.user, this.confirmPassword, this.resourceService, this, this.loading, validateReset, this.handleError);
-  }
+  changePassword(change, user, r.resource(), showMessage, showError, handleError, loading);
 }

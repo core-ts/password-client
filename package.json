@@ -1,7 +1,7 @@
 {
-  "name": "password-component",
-  "version": "0.0.7",
-  "description": "Password Component",
+  "name": "password-client",
+  "version": "0.1.1",
+  "description": "Password Client",
   "main": "./lib/index.js",
   "types": "./src/index.ts",
   "scripts": {
@@ -17,11 +17,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com/common-ts/password-component"
+    "url": "git@github.com/core-ts/password-client"
   },
   "keywords": [
     "password",
-    "password component",
-    "password-component"
+    "password client",
+    "password-client"
   ]
 }
