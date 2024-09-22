@@ -1,1 +1,1 @@
-# password-component
+# password-client
